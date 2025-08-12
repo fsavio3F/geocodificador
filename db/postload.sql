@@ -149,7 +149,10 @@ mejor AS (
 ),
 pt AS (
   SELECT id, numero_cal_txt AS numero_cal, nombre_cal,
-         ST_LineInterpolatePoint(geom, GREATEST(0.0, LEAST(1.0, t_clamped))) AS geom_pt
+         ST_LineInterpolatePoint(
+           ST_LineMerge(ST_CollectionExtract(geom, 2)),
+           GREATEST(0.0, LEAST(1.0, t_clamped))
+         ) AS geom_pt
   FROM mejor
 )
 SELECT jsonb_build_object(
@@ -166,7 +169,20 @@ SELECT jsonb_build_object(
 $$;
 
 CREATE OR REPLACE FUNCTION public.geocode_interseccion(calle1_q text, calle2_q text)
-RETURNS jsonb LANGUAGE sql STABLE AS $$
+RETURNS jsonb
+LANGUAGE sql
+STABLE
+AS $$
+/*
+  Devuelve un JSON con:
+    success: boolean
+    lat, lon: coordenadas en EPSG:4326
+    geojson: Point en EPSG:4326
+    message: texto en caso de no encontrar
+  Notas:
+    - Extrae POINT de collections/multipoints si fuera necesario.
+    - Si el SRID es 0/unknown, asume 3857 y transforma a 4326 para la salida.
+*/
 WITH codes AS (
   SELECT public.resolve_code_or_name(calle1_q) AS c1,
          public.resolve_code_or_name(calle2_q) AS c2
@@ -175,18 +191,40 @@ norm AS (
   SELECT public.norm_code(c1) AS n1, public.norm_code(c2) AS n2 FROM codes
 ),
 pick AS (
-  SELECT geom
+  SELECT
+    i.geom AS geom_any
   FROM public.intersecciones_geolocalizador i, norm
   WHERE (ARRAY[n1, n2] <@ i.nums_norm) OR (ARRAY[n2, n1] <@ i.nums_norm)
   LIMIT 1
+),
+pt AS (
+  SELECT
+    -- 1) si hay puntos dentro de una collection/multi, tomo el primero
+    COALESCE(
+      NULLIF(ST_GeometryN(ST_CollectionExtract(geom_any, 1), 1), NULL),
+      -- 2) si no hay puntos, uso un punto representativo sobre la geometría
+      ST_PointOnSurface(geom_any)
+    ) AS geom_pt
+  FROM pick
+),
+wgs AS (
+  SELECT
+    ST_Transform(
+      CASE
+        WHEN ST_SRID(geom_pt) = 0 THEN ST_SetSRID(geom_pt, 3857)  -- fallback si viniera sin SRID
+        ELSE geom_pt
+      END,
+      4326
+    ) AS g4326
+  FROM pt
 )
 SELECT jsonb_build_object(
-  'success', (SELECT TRUE WHERE EXISTS (SELECT 1 FROM pick)),
-  'lat', (SELECT ST_Y(ST_Transform(geom,4326)) FROM pick),
-  'lon', (SELECT ST_X(ST_Transform(geom,4326)) FROM pick),
-  'geojson', (SELECT ST_AsGeoJSON(ST_Transform(geom,4326))::jsonb FROM pick),
-  'message', CASE WHEN EXISTS (SELECT 1 FROM pick) THEN NULL
-                  ELSE 'Intersección no encontrada.' END
+  'success', (SELECT TRUE WHERE EXISTS (SELECT 1 FROM wgs WHERE g4326 IS NOT NULL)),
+  'lat',     (SELECT ST_Y(g4326) FROM wgs),
+  'lon',     (SELECT ST_X(g4326) FROM wgs),
+  'geojson', (SELECT ST_AsGeoJSON(g4326)::jsonb FROM wgs),
+  'message', CASE WHEN EXISTS (SELECT 1 FROM wgs WHERE g4326 IS NOT NULL) THEN NULL
+                  ELSE 'Intersección no encontrada o geometría no puntual.' END
 );
 $$;
 
