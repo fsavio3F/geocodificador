@@ -1,0 +1,89 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: ${PGDB}
+      POSTGRES_USER: ${PGUSER}
+      POSTGRES_PASSWORD: ${PGPASSWORD}
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+      - ./data:/data:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PGUSER} -d ${PGDB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+    ports: ["9200:9200"]
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200 >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 40
+
+  importer:
+    build:
+      context: .
+      dockerfile: importer/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGPORT: 5432
+      PGDB: ${PGDB}
+      PGUSER: ${PGUSER}
+      PGPASSWORD: ${PGPASSWORD}
+      DATA_DIR: /data
+      POSTLOAD_SQL: /app/postload.sql   # o /db/postload.sql si lo montás
+    volumes:
+      - ./data:/data:ro
+      # - ./db:/db:ro                   # si NO copias postload.sql a la imagen
+
+  api:
+    build:
+      context: ./api
+    environment:
+      PGHOST: db
+      PGPORT: 5432
+      PGDB: ${PGDB}
+      PGUSER: ${PGUSER}
+      PGPASSWORD: ${PGPASSWORD}
+      ES_URL: http://elasticsearch:9200
+    ports: ["8000:8000"]
+    depends_on:
+      db:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+
+  loader:
+    build:
+      context: ./loader
+    environment:
+      ES_URL: http://elasticsearch:9200
+      ES_HOST: elasticsearch
+      PGHOST: db
+      PGPORT: 5432
+      PGDB: ${PGDB}
+      PGUSER: ${PGUSER}
+      PGPASSWORD: ${PGPASSWORD}
+    depends_on:
+      importer:
+        condition: service_completed_successfully
+      elasticsearch:
+        condition: service_healthy
+    command: ["python", "load_calles.py"]
+
+volumes:
+  pgdata:
+  esdata:

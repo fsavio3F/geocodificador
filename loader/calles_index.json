@@ -1,0 +1,37 @@
+{
+  "settings": {
+    "analysis": {
+      "char_filter": { "collapse_spaces": {"type":"pattern_replace","pattern":"\\s+","replacement":" "} },
+      "filter": {
+        "honorific_stop": {
+          "type":"stop","ignore_case":true,
+          "stopwords":["avenida","av","av.","avda","calle","fray","gral","gral.","general","dr","dr.","pte","pte.","presidente","mons","monseñor","monsenor","pbro","pbro."]
+        },
+        "street_edge": { "type":"edge_ngram","min_gram":2,"max_gram":15 },
+        "es_ascii": { "type":"asciifolding","preserve_original":false }
+      },
+      "analyzer": {
+        "street_index": {
+          "type":"custom","char_filter":["html_strip","collapse_spaces"],
+          "tokenizer":"standard","filter":["lowercase","es_ascii","honorific_stop","street_edge"]
+        },
+        "street_query": {
+          "type":"custom","char_filter":["html_strip","collapse_spaces"],
+          "tokenizer":"standard","filter":["lowercase","es_ascii","honorific_stop"]
+        }
+      },
+      "normalizer": { "street_kw_norm": { "type":"custom","filter":["lowercase","asciifolding"] } }
+    }
+  },
+  "mappings": {
+    "properties": {
+      "id":         { "type":"keyword" },
+      "numero_cal": { "type":"keyword","normalizer":"street_kw_norm" },
+      "nombre_cal": {
+        "type":"text","analyzer":"street_index","search_analyzer":"street_query",
+        "fields": { "kw": { "type":"keyword","normalizer":"street_kw_norm" }, "comp": { "type":"completion","analyzer":"street_index","search_analyzer":"street_query" } }
+      },
+      "centroid":   { "type":"geo_point" }
+    }
+  }
+}
