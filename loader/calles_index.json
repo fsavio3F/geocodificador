@@ -1,37 +1,116 @@
 {
   "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 0,
+    "refresh_interval": "1s",
     "analysis": {
-      "char_filter": { "collapse_spaces": {"type":"pattern_replace","pattern":"\\s+","replacement":" "} },
+      "char_filter": {
+        "collapse_spaces": { "type": "pattern_replace", "pattern": "\\s+", "replacement": " " },
+        "abreviaturas": {
+          "type": "mapping",
+          "mappings": [
+            "av. => avenida",
+            "avda => avenida",
+            "av => avenida",
+            "gral => general",
+            "gral. => general",
+            "grl => general",
+            "cnel => coronel",
+            "cap. => capitan",
+            "dr. => doctor",
+            "pte => presidente",
+            "s. => san",
+            "sto => santo",
+            "sta => santa"
+          ]
+        }
+      },
       "filter": {
         "honorific_stop": {
-          "type":"stop","ignore_case":true,
-          "stopwords":["avenida","av","av.","avda","calle","fray","gral","gral.","general","dr","dr.","pte","pte.","presidente","mons","monseñor","monsenor","pbro","pbro."]
+          "type": "stop",
+          "ignore_case": true,
+          "stopwords": [
+            "avenida","av","av.","avda","calle","fray","gral","gral.","general",
+            "dr","dr.","pte","pte.","presidente","mons","monseñor","monsenor",
+            "pbro","pbro."
+          ]
         },
-        "street_edge": { "type":"edge_ngram","min_gram":2,"max_gram":15 },
-        "es_ascii": { "type":"asciifolding","preserve_original":false }
+        "es_stop": { "type": "stop", "stopwords": "_spanish_" },
+        "connectores_stop": {
+          "type": "stop",
+          "ignore_case": true,
+          "stopwords": ["de","del","la","las","los","y"]
+        },
+        "initials_capture": {
+          "type": "pattern_capture",
+          "preserve_original": true,
+          "patterns": ["(\\b\\p{L})\\p{L}+"]
+        },
+        "numeros_es": {
+          "type": "synonym_graph",
+          "lenient": true,
+          "synonyms": [
+            "1, uno","2, dos","3, tres","4, cuatro","5, cinco","6, seis","7, siete","8, ocho","9, nueve","10, diez",
+            "11, once","12, doce","13, trece","14, catorce","15, quince","16, dieciseis","17, diecisiete","18, dieciocho",
+            "19, diecinueve","20, veinte","21, veintiuno","22, veintidos","23, veintitres","24, veinticuatro",
+            "25, veinticinco","26, veintiseis","27, veintisiete","28, veintiocho","29, veintinueve","30, treinta","31, treinta y uno"
+          ]
+        },
+        "shingles": {
+          "type": "shingle",
+          "min_shingle_size": 2,
+          "max_shingle_size": 3,
+          "output_unigrams": true
+        },
+        "edge_3_15": { "type": "edge_ngram", "min_gram": 3, "max_gram": 15 },
+        "es_ascii": { "type": "asciifolding", "preserve_original": false }
       },
       "analyzer": {
         "street_index": {
-          "type":"custom","char_filter":["html_strip","collapse_spaces"],
-          "tokenizer":"standard","filter":["lowercase","es_ascii","honorific_stop","street_edge"]
+          "type": "custom",
+          "char_filter": ["html_strip", "collapse_spaces", "abreviaturas"],
+          "tokenizer": "standard",
+          "filter": [
+            "lowercase","es_ascii",
+            "initials_capture","numeros_es",
+            "honorific_stop","connectores_stop","es_stop",
+            "shingles","edge_3_15"
+          ]
         },
         "street_query": {
-          "type":"custom","char_filter":["html_strip","collapse_spaces"],
-          "tokenizer":"standard","filter":["lowercase","es_ascii","honorific_stop"]
+          "type": "custom",
+          "char_filter": ["html_strip", "collapse_spaces", "abreviaturas"],
+          "tokenizer": "standard",
+          "filter": [
+            "lowercase","es_ascii",
+            "initials_capture","numeros_es",
+            "honorific_stop","connectores_stop","es_stop"
+          ]
         }
       },
-      "normalizer": { "street_kw_norm": { "type":"custom","filter":["lowercase","asciifolding"] } }
+      "normalizer": {
+        "street_kw_norm": {
+          "type": "custom",
+          "filter": ["lowercase","asciifolding"]
+        }
+      }
     }
   },
   "mappings": {
     "properties": {
-      "id":         { "type":"keyword" },
-      "numero_cal": { "type":"keyword","normalizer":"street_kw_norm" },
+      "id":         { "type": "keyword" },
+      "numero_cal": { "type": "keyword", "normalizer": "street_kw_norm" },
       "nombre_cal": {
-        "type":"text","analyzer":"street_index","search_analyzer":"street_query",
-        "fields": { "kw": { "type":"keyword","normalizer":"street_kw_norm" }, "comp": { "type":"completion","analyzer":"street_index","search_analyzer":"street_query" } }
+        "type": "text",
+        "analyzer": "street_index",
+        "search_analyzer": "street_query",
+        "fields": {
+          "kw":   { "type": "keyword", "normalizer": "street_kw_norm" },
+          "comp": { "type": "completion", "analyzer": "street_index", "search_analyzer": "street_query" },
+          "sap":  { "type": "search_as_you_type" }
+        }
       },
-      "centroid":   { "type":"geo_point" }
+      "centroid":   { "type": "geo_point" }
     }
   }
 }

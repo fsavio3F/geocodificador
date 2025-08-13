@@ -29,19 +29,49 @@ def sugerencias(qstr: str = "", limit: int = Query(20, ge=1, le=50)):
     items = [{"numero_cal": r[0], "nombre_cal": r[1], "score": float(r[2])} for r in rows]
     return {"items": items, "count": len(items)}
 
-@app.get("/sugerencias_es")
-async def sugerencias_es(qstr: str = "", limit: int = Query(10, ge=1, le=50)):
+@app.get("/sugerencias_es2")
+async def sugerencias_es2(qstr: str = "", limit: int = Query(10, ge=1, le=50)):
     body = {
-      "size": 0,
-      "suggest": {
-        "calles": { "prefix": qstr, "completion": { "field": "nombre_cal.comp", "fuzzy": {"fuzziness": 2}, "size": limit } }
-      }
+        "size": limit,
+        "query": {
+            "bool": {
+                "should": [
+                    { "match_phrase": {
+                        "nombre_cal": { "query": qstr, "slop": 3, "boost": 5 }
+                    }},
+                    { "multi_match": {
+                        "query": qstr,
+                        "type": "bool_prefix",
+                        "fields": [
+                            "nombre_cal",
+                            "nombre_cal._2gram",
+                            "nombre_cal._3gram",
+                            "nombre_cal.sap"
+                        ],
+                        "boost": 3
+                    }},
+                    { "match": {
+                        "nombre_cal": {
+                            "query": qstr,
+                            "fuzziness": "AUTO",
+                            "prefix_length": 2,
+                            "boost": 1.5
+                        }
+                    }}
+                ],
+                "minimum_should_match": 1
+            }
+        }
     }
     async with httpx.AsyncClient() as c:
         r = await c.post(f"{ES}/calles/_search", json=body, timeout=5.0)
     r.raise_for_status()
-    s = r.json()["suggest"]["calles"][0]["options"]
-    return {"items": [{"text": o["text"], "_id": o["_id"]} for o in s]}
+    hits = r.json()["hits"]["hits"]
+    return {
+        "items": [{"_id": h["_id"], "score": h["_score"], **h["_source"]} for h in hits],
+        "count": len(hits)
+    }
+
 
 @app.get("/geocode_direccion")
 def geocode_direccion(calle: str | None = None, altura: int = Query(...), numero_cal: str | None = None, fallback: bool = False):
