@@ -160,9 +160,24 @@ SELECT jsonb_build_object(
   'numero_cal', (SELECT numero_cal FROM pt),
   'nombre_cal', (SELECT nombre_cal FROM pt),
   'altura', altura,
+  'paridad', CASE WHEN altura % 2 = 0 THEN 'par' ELSE 'impar' END,
+  'min_par',   (SELECT min_par   FROM mejor),
+  'max_par',   (SELECT max_par   FROM mejor),
+  'min_impar', (SELECT min_impar FROM mejor),
+  'max_impar', (SELECT max_impar FROM mejor),
+  'min_rango', CASE
+                 WHEN altura % 2 = 0 THEN (SELECT min_par   FROM mejor)
+                 ELSE                      (SELECT min_impar FROM mejor)
+               END,
+  'max_rango', CASE
+                 WHEN altura % 2 = 0 THEN (SELECT max_par   FROM mejor)
+                 ELSE                      (SELECT max_impar FROM mejor)
+               END,
+
   'lat', (SELECT ST_Y(ST_Transform(geom_pt,4326)) FROM pt),
   'lon', (SELECT ST_X(ST_Transform(geom_pt,4326)) FROM pt),
   'geojson', (SELECT ST_AsGeoJSON(ST_Transform(geom_pt,4326))::jsonb FROM pt),
+
   'message', CASE WHEN EXISTS (SELECT 1 FROM pt) THEN NULL
                   ELSE 'Sin coincidencias en el rango/paridad.' END
 );

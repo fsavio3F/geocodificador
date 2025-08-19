@@ -1,5 +1,5 @@
 # docker-compose.yml
-# Nota: no declares "version:" (está obsoleto en Compose v2)
+# Compose v2 (no uses "version:")
 
 services:
   db:
@@ -10,13 +10,13 @@ services:
       POSTGRES_USER: ${PGUSER}
       POSTGRES_PASSWORD: ${PGPASSWORD}
     ports:
-      - "5432:5432"
+      - "5432:5432"   # opcional: acceso a PG desde la LAN
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./db/init:/docker-entrypoint-initdb.d:ro   # SQL de init opcional
-      - ./data:/data:ro                            # accesible para diagnósticos/ETL
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+      - ./data:/data:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${PGUSER} -d ${PGDB}"]
+      test: ["CMD-SHELL", "pg_isready -U ${PGUSER} -d ${PGDB} -h 127.0.0.1"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -30,7 +30,7 @@ services:
       - xpack.security.enabled=false
       - ES_JAVA_OPTS=-Xms1g -Xmx1g
     ports:
-      - "9200:9200"
+      - "9200:9200"   # opcional: acceso a ES desde la LAN
     volumes:
       - esdata:/usr/share/elasticsearch/data
     healthcheck:
@@ -55,12 +55,12 @@ services:
       PGUSER: ${PGUSER}
       PGPASSWORD: ${PGPASSWORD}
       DATA_DIR: /data
-      # Si tu postload se copia en la imagen, dejalo apuntando a /app/postload.sql
+      # Si preferís montar en vez de copiar en el Dockerfile, descomentá la línea de volumes de postload.sql
       POSTLOAD_SQL: /app/postload.sql
     volumes:
       - ./data:/data:ro
-      # - ./db:/db:ro  # alternativa si preferís montar el postload en vez de copiarlo
-    restart: "no"     # corre una vez y termina
+      # - ./db/postload.sql:/app/postload.sql:ro
+    restart: "no"   # corre una vez y termina
 
   loader:
     build:
@@ -68,7 +68,7 @@ services:
     container_name: geocodificador-loader-1
     environment:
       ES_URL: http://elasticsearch:9200
-      ES_INDEX: calles
+      ES_INDEX: ${ES_INDEX:-calles}
       PGHOST: db
       PGPORT: 5432
       PGDB: ${PGDB}
@@ -82,7 +82,7 @@ services:
       elasticsearch:
         condition: service_healthy
     command: ["python", "load_calles.py"]
-    restart: "no"     # corre una vez y termina
+    restart: "no"   # corre una vez y termina
 
   api:
     build:
@@ -95,13 +95,21 @@ services:
       PGUSER: ${PGUSER}
       PGPASSWORD: ${PGPASSWORD}
       ES_URL: http://elasticsearch:9200
+      ES_INDEX: ${ES_INDEX:-calles}
+      # Si consumís desde navegador en otra PC, seteá CORS_ORIGINS en tu .env:
+      # CORS_ORIGINS: http://IP_DEL_HOST:3000,http://IP_DEL_HOST:8000
     ports:
-      - "8000:8000"
+      - "8000:8000"  # API accesible en LAN por http://IP_DEL_HOST:8000
     depends_on:
       db:
         condition: service_healthy
       elasticsearch:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
     restart: unless-stopped
 
 volumes:
