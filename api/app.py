@@ -132,9 +132,12 @@ async def sugerencias_es2(
     qstr: str = Query("", min_length=1, max_length=100),
     limit: int = Query(10, ge=1, le=50)
 ):
+    # Pedimos más hits para poder deduplicar por nombre
+    es_size = min(limit * 5, 200)
+
     # Búsqueda híbrida: frase > prefijo > fuzzy
     body = {
-        "size": limit,
+        "size": es_size,
         "query": {
             "bool": {
                 "should": [
@@ -157,7 +160,20 @@ async def sugerencias_es2(
         raise HTTPException(502, f"Error Elasticsearch: {e!s}")
 
     hits = res.get("hits", {}).get("hits", [])
-    items = [{"_id": h.get("_id"), "score": h.get("_score"), **(h.get("_source") or {})} for h in hits]
+
+    # Deduplicar por nombre_cal, priorizando el hit de mayor score (ya viene ordenado)
+    seen = set()
+    items = []
+    for h in hits:
+        src = h.get("_source") or {}
+        nombre = src.get("nombre_cal")
+        if not nombre or nombre in seen:
+            continue
+        items.append({"_id": h.get("_id"), "score": h.get("_score"), **src})
+        seen.add(nombre)
+        if len(items) >= limit:
+            break
+
     return {"items": items, "count": len(items)}
 
 @app.get("/geocode_direccion")
