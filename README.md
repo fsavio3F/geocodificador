@@ -222,10 +222,12 @@ curl "http://localhost:8000/geocode_interseccion?calle1=corrientes&calle2=callao
 #### `intersecciones_geolocalizador`
 ```sql
 - id: bigint (PK)
-- num_calle: text (códigos separados por ;)
-- nums_norm: text[] (códigos normalizados)
+- num_calle: text (códigos separados por ; - ej: "205; 248")
+- nums_norm: text[] (array normalizado - calculado automáticamente)
 - geom: geometry
 ```
+
+**Nota**: `nums_norm` es una columna derivada que se crea y mantiene automáticamente por PostgreSQL. Ver [docs/NUMS_NORM_EXPLAINED.md](./docs/NUMS_NORM_EXPLAINED.md) para detalles.
 
 ### Funciones Clave
 
