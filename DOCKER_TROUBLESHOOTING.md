@@ -73,6 +73,19 @@ docker compose build --no-cache importer
 docker compose up
 ```
 
+### Elasticsearch startup INFO logs
+
+**Symptom** (ejemplo):
+```json
+{"@timestamp":"2025-12-11T18:37:32.454Z", "log.level": "INFO", "message":"loaded module [x-pack-eql]", ...}
+{"@timestamp":"2025-12-11T18:37:33.533Z", "log.level": "INFO", "message":"using [1] data paths, mounts [[/usr/share/elasticsearch/data (/dev/sde)]], ...}
+{"@timestamp":"2025-12-11T18:37:33.599Z", "log.level": "INFO", "message":"node name [f926ec486065], node ID [...], cluster name [docker-cluster], roles [...]", ...}
+```
+
+**Qué significa**: Son mensajes de arranque normales de Elasticsearch (carga de módulos, rutas de datos, heap, roles). No indican fallas.
+
+**Acción**: Ninguna. Solo investiga si aparecen líneas `WARN`/`ERROR` o si el healthcheck (`docker compose ps` / `curl http://localhost:9200/_cluster/health`) reporta problemas.
+
 ## Fresh Start
 
 To completely start from scratch:
