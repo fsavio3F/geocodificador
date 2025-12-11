@@ -55,7 +55,7 @@ La API Python es solo un **thin wrapper** que:
 
 ## 🚀 Inicio Rápido
 
-### Prerequisitos
+### Prerrequisitos
 
 - Docker y Docker Compose v2
 - 4GB+ RAM disponible
@@ -281,7 +281,7 @@ ogr2ogr -f PostgreSQL "PG:..." \
 Ejecutado después de importar:
 - Crea índices adicionales
 - Define funciones de geocodificación
-- Materializa columnas derivadas (`nums_norm`)
+- Materializar columnas derivadas (`nums_norm`)
 - Ejecuta `ANALYZE` para estadísticas
 
 ### 4. Carga a Elasticsearch (`loader/load_calles.py`)
@@ -440,16 +440,28 @@ def calles_cercanas(lat: float, lon: float):
 CREATE OR REPLACE FUNCTION public.calles_cercanas(
   lat float, lon float, radio_m float
 )
-RETURNS TABLE(...) AS $$
-  SELECT *
+RETURNS TABLE(
+  id bigint,
+  numero_cal text,
+  nombre_cal text,
+  distancia float
+) AS $$
+  SELECT 
+    id,
+    numero_cal::text,
+    nombre_cal,
+    ST_Distance(
+      geom,
+      ST_Transform(ST_SetSRID(ST_MakePoint(lon, lat), 4326), 3857)
+    ) AS distancia
   FROM public.callejero_geolocalizador
   WHERE ST_DWithin(
     geom,
     ST_Transform(ST_SetSRID(ST_MakePoint(lon, lat), 4326), 3857),
     radio_m
   )
-  ORDER BY ST_Distance(geom, ...) ASC;
-$$;
+  ORDER BY distancia ASC;
+$$ LANGUAGE sql STABLE;
 ```
 
 ---
