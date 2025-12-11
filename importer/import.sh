@@ -1,6 +1,19 @@
 #!/bin/sh
 set -eu
 
+on_exit(){
+  rc=$?
+  if [ "$rc" -ne 0 ]; then
+    if type log >/dev/null 2>&1; then
+      log "ERROR: exit code $rc"
+    else
+      printf "%s %s\n" "[importer]" "ERROR: exit code $rc" >&2
+    fi
+  fi
+  trap - EXIT
+  exit "$rc"
+}
+
 # ---------- Config ----------
 PGHOST="${PGHOST:-db}"
 PGPORT="${PGPORT:-5432}"
@@ -43,7 +56,11 @@ ogr_geom_flags(){
     # dejamos que GDAL detecte y promueva a multi
     echo "-nlt PROMOTE_TO_MULTI"
   else
-    echo "$1"  # usar tal cual lo que pase el caller (-nlt LINESTRING/POINT)
+    if [ "$#" -gt 0 ]; then
+      echo "$1"  # usar tal cual lo que pase el caller (-nlt LINESTRING/POINT)
+    else
+      die "Missing geometry flag for ogr_geom_flags (expected -nlt LINESTRING or -nlt POINT)"
+    fi
   fi
 }
 
@@ -55,6 +72,7 @@ hash_file(){
     md5sum "$1" | awk '{print $1}'
   fi
 }
+trap on_exit EXIT
 
 # ---------- Esperar PG ----------
 log "Esperando Postgres en ${PGHOST}:${PGPORT}/${PGDB} ..."
@@ -101,7 +119,7 @@ if [ "${SKIP_IMPORT:-0}" -eq 0 ]; then
   ogr2ogr -f PostgreSQL "PG:host=${PGHOST} port=${PGPORT} dbname=${PGDB} user=${PGUSER} password=${PGPASSWORD}" \
     "$CALLEJERO" \
     -nln "$TAB_CALLEJERO" \
-    $(ogr_geom_flags) \
+    $(ogr_geom_flags "-nlt LINESTRING") \
     -lco GEOMETRY_NAME=geom \
     -lco FID=id \
     -t_srs "$DST_SRS" -s_srs "$SRC_SRS" \
@@ -114,7 +132,7 @@ if [ "${SKIP_IMPORT:-0}" -eq 0 ]; then
   ogr2ogr -f PostgreSQL "PG:host=${PGHOST} port=${PGPORT} dbname=${PGDB} user=${PGUSER} password=${PGPASSWORD}" \
     "$INTESECC" \
     -nln "$TAB_INTERS" \
-    $(ogr_geom_flags) \
+    $(ogr_geom_flags "-nlt POINT") \
     -lco GEOMETRY_NAME=geom \
     -lco FID=id \
     -t_srs "$DST_SRS" -s_srs "$SRC_SRS" \
