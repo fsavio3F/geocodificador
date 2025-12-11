@@ -31,7 +31,6 @@ export PGPASSWORD
 # ---------- Helpers ----------
 log(){ printf '%s %s\n' "[importer]" "$*" ; }
 die(){ printf '%s %s\n' "[importer][ERROR]" "$*" >&2; exit 1; }
-trap 'rc=$?; if [ "$rc" -ne 0 ]; then log "ERROR: exit code $rc"; fi' EXIT
 
 ogr_overwrite_flag(){
   [ "$OGR_APPEND" = "1" ] && echo "-append" || echo "-overwrite"
@@ -44,7 +43,11 @@ ogr_geom_flags(){
     # dejamos que GDAL detecte y promueva a multi
     echo "-nlt PROMOTE_TO_MULTI"
   else
-    echo "${1:-}"  # usar tal cual lo que pase el caller (-nlt LINESTRING/POINT)
+    if [ -n "${1:-}" ]; then
+      echo "$1"  # usar tal cual lo que pase el caller (-nlt LINESTRING/POINT)
+    else
+      echo "-nlt GEOMETRY"  # fallback explícito para evitar vacío
+    fi
   fi
 }
 
@@ -56,6 +59,7 @@ hash_file(){
     md5sum "$1" | awk '{print $1}'
   fi
 }
+trap 'rc=$?; if [ "$rc" -ne 0 ]; then log "ERROR: exit code $rc"; fi' EXIT
 
 # ---------- Esperar PG ----------
 log "Esperando Postgres en ${PGHOST}:${PGPORT}/${PGDB} ..."
