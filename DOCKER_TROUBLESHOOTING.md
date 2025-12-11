@@ -82,9 +82,11 @@ docker compose up
 {"@timestamp":"2025-12-11T18:37:33.599Z", "log.level": "INFO", "message":"node name [f926ec486065], node ID [LHXD3xpTTgKMKZqkoOeDSg], cluster name [docker-cluster], roles [data_hot, ml, data_frozen, ingest, data_cold, data, remote_cluster_client, master, data_warm, data_content, transform]", "ecs.version": "1.2.0","service.name":"ES_ECS","event.dataset":"elasticsearch.server","process.thread.name":"main","log.logger":"org.elasticsearch.node.Node","elasticsearch.node.name":"f926ec486065","elasticsearch.cluster.name":"docker-cluster"}
 ```
 
-**What it means**: These are normal Elasticsearch startup messages (module loading, data paths, heap, roles). They do not indicate failures.
+**What it means**: These are normal Elasticsearch startup messages (module loading, data paths, node info/roles). They do not indicate failures.
 
-**Action**: None. Investigate only if `WARN`/`ERROR` lines appear or if the healthcheck (`docker compose ps` / `curl http://localhost:9200/_cluster/health`) reports problems. A healthy `_cluster/health` typically returns `"status":"green"`; `"status":"yellow"` can be acceptable on single-node dev setups.
+**Action**: None. Investigate only if `WARN`/`ERROR` lines appear or if the healthcheck shows issues.
+- Healthcheck commands: `docker compose ps` and `curl http://localhost:9200/_cluster/health`
+- Expected responses: `"status":"green"`; `"status":"yellow"` can be acceptable on single-node dev setups.
 
 ## Fresh Start
 
