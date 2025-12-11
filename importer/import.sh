@@ -1,6 +1,16 @@
 #!/bin/sh
 set -eu
-trap 'rc=$?; if [ "$rc" -ne 0 ]; then if command -v log >/dev/null 2>&1; then log "ERROR: exit code $rc"; else printf "%s %s\n" "[importer]" "ERROR: exit code $rc" >&2; fi; fi' EXIT
+
+on_exit(){
+  rc=$?
+  if [ "$rc" -ne 0 ]; then
+    if command -v log >/dev/null 2>&1; then
+      log "ERROR: exit code $rc"
+    else
+      printf "%s %s\n" "[importer]" "ERROR: exit code $rc" >&2
+    fi
+  fi
+}
 
 # ---------- Config ----------
 PGHOST="${PGHOST:-db}"
@@ -32,6 +42,7 @@ export PGPASSWORD
 # ---------- Helpers ----------
 log(){ printf '%s %s\n' "[importer]" "$*" ; }
 die(){ printf '%s %s\n' "[importer][ERROR]" "$*" >&2; exit 1; }
+trap on_exit EXIT
 
 ogr_overwrite_flag(){
   [ "$OGR_APPEND" = "1" ] && echo "-append" || echo "-overwrite"
@@ -47,7 +58,7 @@ ogr_geom_flags(){
     if [ -n "${1:-}" ]; then
       echo "$1"  # usar tal cual lo que pase el caller (-nlt LINESTRING/POINT)
     else
-      die "Missing geometry flag for ogr_geom_flags (expected e.g. -nlt LINESTRING/POINT)"
+      die "Missing geometry flag for ogr_geom_flags (expected -nlt LINESTRING or -nlt POINT)"
     fi
   fi
 }
