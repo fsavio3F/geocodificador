@@ -117,8 +117,24 @@ else
 fi
 
 # ---------- Post-proceso ----------
-# Note: nums_norm column and backfill will be handled by postload.sql
-# Just run basic ANALYZE if tables exist
+# Refresh derived columns if they exist
+log "Refrescando derivados..."
+psql "host=${PGHOST} port=${PGPORT} dbname=${PGDB} user=${PGUSER}" >/dev/null 2>&1 <<'SQL' || true
+DO $$
+BEGIN
+  -- Only update nums_norm if the column exists
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_schema='public' AND table_name='intersecciones_geolocalizador'
+               AND column_name='nums_norm') 
+     AND EXISTS (SELECT 1 FROM pg_proc WHERE proname='calc_nums_norm' AND pronamespace = 'public'::regnamespace) THEN
+    UPDATE public.intersecciones_geolocalizador
+      SET nums_norm = public.calc_nums_norm(num_calle)
+      WHERE nums_norm IS NULL;
+  END IF;
+END$$;
+SQL
+
+# Basic ANALYZE if tables exist
 log "Ejecutando análisis preliminar..."
 psql "host=${PGHOST} port=${PGPORT} dbname=${PGDB} user=${PGUSER}" >/dev/null 2>&1 <<'SQL' || true
 DO $$
