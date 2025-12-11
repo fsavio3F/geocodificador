@@ -4,7 +4,7 @@ set -eu
 on_exit(){
   rc=$?
   if [ "$rc" -ne 0 ]; then
-    if command -v log >/dev/null 2>&1; then
+    if type log >/dev/null 2>&1; then
       log "ERROR: exit code $rc"
     else
       printf "%s %s\n" "[importer]" "ERROR: exit code $rc" >&2
@@ -42,7 +42,6 @@ export PGPASSWORD
 # ---------- Helpers ----------
 log(){ printf '%s %s\n' "[importer]" "$*" ; }
 die(){ printf '%s %s\n' "[importer][ERROR]" "$*" >&2; exit 1; }
-trap on_exit EXIT
 
 ogr_overwrite_flag(){
   [ "$OGR_APPEND" = "1" ] && echo "-append" || echo "-overwrite"
@@ -71,6 +70,7 @@ hash_file(){
     md5sum "$1" | awk '{print $1}'
   fi
 }
+trap on_exit EXIT
 
 # ---------- Esperar PG ----------
 log "Esperando Postgres en ${PGHOST}:${PGPORT}/${PGDB} ..."
