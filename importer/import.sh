@@ -10,7 +10,8 @@ on_exit(){
       printf "%s %s\n" "[importer]" "ERROR: exit code $rc" >&2
     fi
   fi
-  return "$rc"
+  trap - EXIT
+  exit "$rc"
 }
 
 # ---------- Config ----------
@@ -55,7 +56,7 @@ ogr_geom_flags(){
     # dejamos que GDAL detecte y promueva a multi
     echo "-nlt PROMOTE_TO_MULTI"
   else
-    if [ -n "${1-}" ]; then
+    if [ -n "${1:-}" ]; then
       echo "$1"  # usar tal cual lo que pase el caller (-nlt LINESTRING/POINT)
     else
       die "Missing geometry flag for ogr_geom_flags (expected -nlt LINESTRING or -nlt POINT)"
