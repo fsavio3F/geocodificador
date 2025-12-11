@@ -102,7 +102,7 @@ if [ "${SKIP_IMPORT:-0}" -eq 0 ]; then
   ogr2ogr -f PostgreSQL "PG:host=${PGHOST} port=${PGPORT} dbname=${PGDB} user=${PGUSER} password=${PGPASSWORD}" \
     "$CALLEJERO" \
     -nln "$TAB_CALLEJERO" \
-    $(ogr_geom_flags) \
+    $(ogr_geom_flags "-nlt LINESTRING") \
     -lco GEOMETRY_NAME=geom \
     -lco FID=id \
     -t_srs "$DST_SRS" -s_srs "$SRC_SRS" \
@@ -115,7 +115,7 @@ if [ "${SKIP_IMPORT:-0}" -eq 0 ]; then
   ogr2ogr -f PostgreSQL "PG:host=${PGHOST} port=${PGPORT} dbname=${PGDB} user=${PGUSER} password=${PGPASSWORD}" \
     "$INTESECC" \
     -nln "$TAB_INTERS" \
-    $(ogr_geom_flags) \
+    $(ogr_geom_flags "-nlt POINT") \
     -lco GEOMETRY_NAME=geom \
     -lco FID=id \
     -t_srs "$DST_SRS" -s_srs "$SRC_SRS" \
