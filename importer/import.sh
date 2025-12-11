@@ -91,7 +91,13 @@ fi
 
 # ---------- Importar (si corresponde) ----------
 if [ "${SKIP_IMPORT:-0}" -eq 0 ]; then
-  log "Importando $CALLEJERO → $TAB_CALLEJERO ..."
+  log "=========================================="
+  log "INICIANDO IMPORTACIÓN DE DATOS"
+  log "=========================================="
+  
+  log "[1/2] Importando $CALLEJERO → $TAB_CALLEJERO ..."
+  log "      Archivo: $(basename "$CALLEJERO")"
+  log "      Tamaño: $(du -h "$CALLEJERO" | cut -f1)"
   ogr2ogr -f PostgreSQL "PG:host=${PGHOST} port=${PGPORT} dbname=${PGDB} user=${PGUSER} password=${PGPASSWORD}" \
     "$CALLEJERO" \
     -nln "$TAB_CALLEJERO" \
@@ -99,9 +105,12 @@ if [ "${SKIP_IMPORT:-0}" -eq 0 ]; then
     -lco GEOMETRY_NAME=geom \
     -lco FID=id \
     -t_srs "$DST_SRS" -s_srs "$SRC_SRS" \
-    $(ogr_overwrite_flag) -skipfailures
+    $(ogr_overwrite_flag) -skipfailures -progress
+  log "✓ Callejero importado exitosamente"
 
-  log "Importando $INTESECC → $TAB_INTERS ..."
+  log "[2/2] Importando $INTESECC → $TAB_INTERS ..."
+  log "      Archivo: $(basename "$INTESECC")"
+  log "      Tamaño: $(du -h "$INTESECC" | cut -f1)"
   ogr2ogr -f PostgreSQL "PG:host=${PGHOST} port=${PGPORT} dbname=${PGDB} user=${PGUSER} password=${PGPASSWORD}" \
     "$INTESECC" \
     -nln "$TAB_INTERS" \
@@ -109,17 +118,25 @@ if [ "${SKIP_IMPORT:-0}" -eq 0 ]; then
     -lco GEOMETRY_NAME=geom \
     -lco FID=id \
     -t_srs "$DST_SRS" -s_srs "$SRC_SRS" \
-    $(ogr_overwrite_flag) -skipfailures
+    $(ogr_overwrite_flag) -skipfailures -progress
+  log "✓ Intersecciones importadas exitosamente"
 
   echo "${H1}|${H2}|${SRC_SRS}|${DST_SRS}|${OGR_APPEND}|${PROMOTE_MULTI}" > "$SFILE"
+  log "=========================================="
+  log "IMPORTACIÓN COMPLETADA"
+  log "=========================================="
 else
   log "Usando datos ya importados."
 fi
 
 # ---------- Post-proceso ----------
+log "=========================================="
+log "EJECUTANDO POST-PROCESAMIENTO"
+log "=========================================="
+
 # Note: nums_norm column and backfill will be handled by postload.sql
 # Just run basic ANALYZE if tables exist
-log "Ejecutando análisis preliminar..."
+log "[1/2] Ejecutando análisis preliminar de tablas..."
 psql "host=${PGHOST} port=${PGPORT} dbname=${PGDB} user=${PGUSER}" >/dev/null 2>&1 <<'SQL' || true
 DO $$
 BEGIN
@@ -131,13 +148,18 @@ BEGIN
   END IF;
 END$$;
 SQL
+log "✓ Análisis completado"
 
 # Ejecutar postload.sql si existe (índices, triggers, funciones geocode_*)
 if [ -f "$POSTLOAD_SQL" ]; then
-  log "Ejecutando postload: $POSTLOAD_SQL"
+  log "[2/2] Ejecutando postload: $POSTLOAD_SQL"
+  log "      Creando índices, triggers y funciones..."
   psql "host=${PGHOST} port=${PGPORT} dbname=${PGDB} user=${PGUSER}" -v ON_ERROR_STOP=1 -f "$POSTLOAD_SQL"
+  log "✓ Post-procesamiento SQL completado"
 else
   log "Sin postload.sql (saltando)."
 fi
 
-log "Importación finalizada."
+log "=========================================="
+log "IMPORTACIÓN FINALIZADA EXITOSAMENTE ✓"
+log "=========================================="
