@@ -241,6 +241,8 @@ EXCEPTION
 END$$;
 
 -- Now create the function with proper parameters
+-- Note: Using CREATE (not CREATE OR REPLACE) because we've already dropped all variants above.
+-- This ensures a clean creation without parameter name conflicts.
 CREATE FUNCTION public.sugerencias_calles(q text, lim int DEFAULT 20)
 RETURNS TABLE(numero_cal text, nombre_cal text, score numeric)
 LANGUAGE sql STABLE AS $$
