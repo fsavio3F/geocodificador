@@ -109,10 +109,24 @@ La función `geocode_direccion` en `db/postload.sql` utiliza estos campos para:
 2. Seleccionar el rango correcto (par o impar)
 3. Interpolar la posición geográfica en el segmento de calle
 
+## Restaurar Datos Originales
+
+Si necesitas restaurar los datos originales (antes de la corrección), el backup se encuentra en:
+```
+data/callejero_geolocalizador.geojson.bak
+```
+
+Para restaurar:
+```bash
+cp data/callejero_geolocalizador.geojson.bak data/callejero_geolocalizador.geojson
+```
+
+**IMPORTANTE**: Este backup contiene los datos originales CON EL ERROR de paridad (par/impar intercambiados). Solo restaurar si es absolutamente necesario para comparación o análisis.
+
 ## Mantenimiento
 
 Si se actualizan los datos fuente:
 1. Ejecutar `validate_heights.py` para verificar la paridad
-2. Si hay problemas, ejecutar `fix_height_parity.py`
+2. Si hay problemas, ejecutar `fix_height_parity.py` (crea backup automático)
 3. Validar con `test_geocoding.py`
 4. Reimportar los datos con el sistema de importer
