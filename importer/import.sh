@@ -31,6 +31,7 @@ export PGPASSWORD
 # ---------- Helpers ----------
 log(){ printf '%s %s\n' "[importer]" "$*" ; }
 die(){ printf '%s %s\n' "[importer][ERROR]" "$*" >&2; exit 1; }
+trap 'rc=$?; if [ "$rc" -ne 0 ]; then log "ERROR: exit code $rc"; fi' EXIT
 
 ogr_overwrite_flag(){
   [ "$OGR_APPEND" = "1" ] && echo "-append" || echo "-overwrite"
@@ -43,7 +44,7 @@ ogr_geom_flags(){
     # dejamos que GDAL detecte y promueva a multi
     echo "-nlt PROMOTE_TO_MULTI"
   else
-    echo "$1"  # usar tal cual lo que pase el caller (-nlt LINESTRING/POINT)
+    echo "${1:-}"  # usar tal cual lo que pase el caller (-nlt LINESTRING/POINT)
   fi
 }
 
