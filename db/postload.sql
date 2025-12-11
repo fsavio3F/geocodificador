@@ -214,7 +214,28 @@ SELECT jsonb_build_object(
 $$;
 
 -- Drop function if exists to avoid parameter name conflicts
+-- Drop all possible variants of the function
 DROP FUNCTION IF EXISTS public.sugerencias_calles(text, integer);
+DROP FUNCTION IF EXISTS public.sugerencias_calles(text);
+DO $$
+DECLARE
+  drop_sql text;
+BEGIN
+  -- Drop any version with different parameter names
+  SELECT COALESCE(
+    string_agg('DROP FUNCTION IF EXISTS ' || oid::regprocedure || ' CASCADE;', ' '),
+    ''
+  ) INTO drop_sql
+  FROM pg_proc
+  WHERE proname = 'sugerencias_calles'
+    AND pronamespace = 'public'::regnamespace;
+  
+  IF drop_sql <> '' THEN
+    EXECUTE drop_sql;
+  END IF;
+EXCEPTION
+  WHEN OTHERS THEN NULL;
+END$$;
 
 CREATE OR REPLACE FUNCTION public.sugerencias_calles(q text, lim int DEFAULT 20)
 RETURNS TABLE(numero_cal text, nombre_cal text, score numeric)

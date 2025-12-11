@@ -103,6 +103,20 @@ Respuesta esperada:
 }
 ```
 
+### Solución de Problemas
+
+Si encuentras errores durante el inicio, consulta [DOCKER_TROUBLESHOOTING.md](./DOCKER_TROUBLESHOOTING.md) para soluciones comunes.
+
+**Problemas frecuentes**:
+- Error "cannot change name of input parameter": Limpia los volúmenes con `docker compose down -v`
+- Error "column nums_norm does not exist": Corregido en la última versión, actualiza el código
+- Importer falla: Verifica que los archivos GeoJSON existan en `./data/`
+
+**Script de prueba automatizado**:
+```bash
+./scripts/test-docker-compose.sh
+```
+
 ## 📡 API Endpoints
 
 Todos los endpoints delegan el procesamiento pesado a funciones PostgreSQL.
@@ -208,10 +222,12 @@ curl "http://localhost:8000/geocode_interseccion?calle1=corrientes&calle2=callao
 #### `intersecciones_geolocalizador`
 ```sql
 - id: bigint (PK)
-- num_calle: text (códigos separados por ;)
-- nums_norm: text[] (códigos normalizados)
+- num_calle: text (códigos separados por ; - ej: "205; 248")
+- nums_norm: text[] (array normalizado - calculado automáticamente)
 - geom: geometry
 ```
+
+**Nota**: `nums_norm` es una columna derivada que se crea y mantiene automáticamente por PostgreSQL. Ver [docs/NUMS_NORM_EXPLAINED.md](./docs/NUMS_NORM_EXPLAINED.md) para detalles.
 
 ### Funciones Clave
 
