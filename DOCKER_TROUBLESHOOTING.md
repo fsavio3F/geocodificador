@@ -84,7 +84,7 @@ docker compose up
 
 **What it means**: These are normal Elasticsearch startup messages (module loading, data paths, heap, roles). They do not indicate failures.
 
-**Action**: None. Investigate only if `WARN`/`ERROR` lines appear or if the healthcheck (`docker compose ps` / `curl http://localhost:9200/_cluster/health`) reports problems. A healthy `_cluster/health` typically returns `status":"green"`; `status":"yellow"` can be acceptable on single-node dev setups.
+**Action**: None. Investigate only if `WARN`/`ERROR` lines appear or if the healthcheck (`docker compose ps` / `curl http://localhost:9200/_cluster/health`) reports problems. A healthy `_cluster/health` typically returns `"status":"green"`; `"status":"yellow"` can be acceptable on single-node dev setups.
 
 ## Fresh Start
 
