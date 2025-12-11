@@ -75,16 +75,16 @@ docker compose up
 
 ### Elasticsearch startup INFO logs
 
-**Symptom** (ejemplo):
+**Symptom** (example):
 ```json
 {"@timestamp":"2025-12-11T18:37:32.454Z", "log.level": "INFO", "message":"loaded module [x-pack-eql]", ...}
 {"@timestamp":"2025-12-11T18:37:33.533Z", "log.level": "INFO", "message":"using [1] data paths, mounts [[/usr/share/elasticsearch/data (/dev/sde)]], ...}
 {"@timestamp":"2025-12-11T18:37:33.599Z", "log.level": "INFO", "message":"node name [f926ec486065], node ID [...], cluster name [docker-cluster], roles [...]", ...}
 ```
 
-**Qué significa**: Son mensajes de arranque normales de Elasticsearch (carga de módulos, rutas de datos, heap, roles). No indican fallas.
+**What it means**: These are normal Elasticsearch startup messages (module loading, data paths, heap, roles). They do not indicate failures.
 
-**Acción**: Ninguna. Solo investiga si aparecen líneas `WARN`/`ERROR` o si el healthcheck (`docker compose ps` / `curl http://localhost:9200/_cluster/health`) reporta problemas.
+**Action**: None. Investigate only if `WARN`/`ERROR` lines appear or if the healthcheck (`docker compose ps` / `curl http://localhost:9200/_cluster/health`) reports problems.
 
 ## Fresh Start
 
