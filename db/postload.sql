@@ -27,8 +27,16 @@ DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables
              WHERE table_schema='public' AND table_name='intersecciones_geolocalizador') THEN
-    ALTER TABLE public.intersecciones_geolocalizador
-      ADD COLUMN IF NOT EXISTS nums_norm text[];
+    -- Add column if it doesn't exist
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema='public' 
+        AND table_name='intersecciones_geolocalizador'
+        AND column_name='nums_norm'
+    ) THEN
+      ALTER TABLE public.intersecciones_geolocalizador
+        ADD COLUMN nums_norm text[];
+    END IF;
 
     -- Trigger
     DROP TRIGGER IF EXISTS biu_set_nums_norm ON public.intersecciones_geolocalizador;
@@ -215,29 +223,25 @@ $$;
 
 -- Drop function if exists to avoid parameter name conflicts
 -- Drop all possible variants of the function
-DROP FUNCTION IF EXISTS public.sugerencias_calles(text, integer);
-DROP FUNCTION IF EXISTS public.sugerencias_calles(text);
 DO $$
 DECLARE
-  drop_sql text;
+  func_rec RECORD;
 BEGIN
-  -- Drop any version with different parameter names
-  SELECT COALESCE(
-    string_agg('DROP FUNCTION IF EXISTS ' || oid::regprocedure || ' CASCADE;', ' '),
-    ''
-  ) INTO drop_sql
-  FROM pg_proc
-  WHERE proname = 'sugerencias_calles'
-    AND pronamespace = 'public'::regnamespace;
-  
-  IF drop_sql <> '' THEN
-    EXECUTE drop_sql;
-  END IF;
+  -- Drop any version of sugerencias_calles function
+  FOR func_rec IN 
+    SELECT oid::regprocedure::text AS func_signature
+    FROM pg_proc
+    WHERE proname = 'sugerencias_calles'
+      AND pronamespace = 'public'::regnamespace
+  LOOP
+    EXECUTE 'DROP FUNCTION IF EXISTS ' || func_rec.func_signature || ' CASCADE';
+  END LOOP;
 EXCEPTION
   WHEN OTHERS THEN NULL;
 END$$;
 
-CREATE OR REPLACE FUNCTION public.sugerencias_calles(q text, lim int DEFAULT 20)
+-- Now create the function with proper parameters
+CREATE FUNCTION public.sugerencias_calles(q text, lim int DEFAULT 20)
 RETURNS TABLE(numero_cal text, nombre_cal text, score numeric)
 LANGUAGE sql STABLE AS $$
   SELECT * FROM public.resolve_calle(q, lim);
@@ -298,9 +302,11 @@ $$;
 -- Backfill y estadísticas
 DO $$
 BEGIN
+  -- Only backfill if both column and function exist
   IF EXISTS (SELECT 1 FROM information_schema.columns
              WHERE table_schema='public' AND table_name='intersecciones_geolocalizador'
-               AND column_name='nums_norm') THEN
+               AND column_name='nums_norm')
+     AND EXISTS (SELECT 1 FROM pg_proc WHERE proname='calc_nums_norm' AND pronamespace = 'public'::regnamespace) THEN
     UPDATE public.intersecciones_geolocalizador
     SET nums_norm = public.calc_nums_norm(num_calle)
     WHERE nums_norm IS NULL;
