@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+
 trap 'rc=$?; if [ "$rc" -ne 0 ]; then printf "%s %s\n" "[importer]" "ERROR: exit code $rc" >&2; fi' EXIT
 
 # ---------- Config ----------
@@ -47,6 +48,7 @@ ogr_geom_flags(){
     if [ -n "${1:-}" ]; then
       echo "$1"  # usar tal cual lo que pase el caller (-nlt LINESTRING/POINT)
     else
+      log "WARN: geometry flag ausente, usando -nlt GEOMETRY por defecto"
       echo "-nlt GEOMETRY"  # fallback explícito para evitar vacío
     fi
   fi
