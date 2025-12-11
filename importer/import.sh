@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+trap 'rc=$?; if [ "$rc" -ne 0 ]; then if command -v log >/dev/null 2>&1; then log "ERROR: exit code $rc"; else printf "%s %s\n" "[importer]" "ERROR: exit code $rc" >&2; fi; fi' EXIT
 
 # ---------- Config ----------
 PGHOST="${PGHOST:-db}"
@@ -46,8 +47,7 @@ ogr_geom_flags(){
     if [ -n "${1:-}" ]; then
       echo "$1"  # usar tal cual lo que pase el caller (-nlt LINESTRING/POINT)
     else
-      log "WARN: geometry flag missing, using -nlt GEOMETRY by default"
-      echo "-nlt GEOMETRY"  # fallback explícito para evitar vacío
+      die "Missing geometry flag for ogr_geom_flags (expected e.g. -nlt LINESTRING/POINT)"
     fi
   fi
 }
@@ -60,7 +60,6 @@ hash_file(){
     md5sum "$1" | awk '{print $1}'
   fi
 }
-trap 'rc=$?; if [ "$rc" -ne 0 ]; then log "ERROR: exit code $rc"; fi' EXIT
 
 # ---------- Esperar PG ----------
 log "Esperando Postgres en ${PGHOST}:${PGPORT}/${PGDB} ..."
