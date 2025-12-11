@@ -117,13 +117,14 @@ else
 fi
 
 # ---------- Post-proceso ----------
-# recalcular nums_norm si existe la tabla/función
+# recalcular nums_norm si existe la tabla/función/columna
 log "Refrescando derivados..."
 psql "host=${PGHOST} port=${PGPORT} dbname=${PGDB} user=${PGUSER}" >/dev/null <<'SQL' || true
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_proc WHERE proname='calc_nums_norm' AND pronamespace = 'public'::regnamespace)
-     AND EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='intersecciones_geolocalizador') THEN
+     AND EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='intersecciones_geolocalizador')
+     AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='intersecciones_geolocalizador' AND column_name='nums_norm') THEN
     UPDATE public.intersecciones_geolocalizador
       SET nums_norm = public.calc_nums_norm(num_calle)
       WHERE nums_norm IS NULL;
