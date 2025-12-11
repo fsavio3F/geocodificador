@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+trap 'rc=$?; if [ "$rc" -ne 0 ]; then printf "%s %s\n" "[importer]" "ERROR: exit code $rc" >&2; fi' EXIT
 
 # ---------- Config ----------
 PGHOST="${PGHOST:-db}"
@@ -59,7 +60,6 @@ hash_file(){
     md5sum "$1" | awk '{print $1}'
   fi
 }
-trap 'rc=$?; if [ "$rc" -ne 0 ]; then log "ERROR: exit code $rc"; fi' EXIT
 
 # ---------- Esperar PG ----------
 log "Esperando Postgres en ${PGHOST}:${PGPORT}/${PGDB} ..."
