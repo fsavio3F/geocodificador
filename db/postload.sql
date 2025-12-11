@@ -218,14 +218,21 @@ $$;
 DROP FUNCTION IF EXISTS public.sugerencias_calles(text, integer);
 DROP FUNCTION IF EXISTS public.sugerencias_calles(text);
 DO $$
+DECLARE
+  drop_sql text;
 BEGIN
   -- Drop any version with different parameter names
-  EXECUTE (
-    SELECT string_agg('DROP FUNCTION IF EXISTS ' || oid::regprocedure || ' CASCADE;', ' ')
-    FROM pg_proc
-    WHERE proname = 'sugerencias_calles'
-      AND pronamespace = 'public'::regnamespace
-  );
+  SELECT COALESCE(
+    string_agg('DROP FUNCTION IF EXISTS ' || oid::regprocedure || ' CASCADE;', ' '),
+    ''
+  ) INTO drop_sql
+  FROM pg_proc
+  WHERE proname = 'sugerencias_calles'
+    AND pronamespace = 'public'::regnamespace;
+  
+  IF drop_sql <> '' THEN
+    EXECUTE drop_sql;
+  END IF;
 EXCEPTION
   WHEN OTHERS THEN NULL;
 END$$;

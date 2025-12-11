@@ -160,7 +160,10 @@ fi
 # Test geocoding (if data is loaded)
 echo ""
 echo "Checking if geocoding is working..."
-response=$(curl -fsS "http://localhost:8000/geocode?calle=belgrano&altura=100" 2>/dev/null || echo "")
+# Use --get with --data-urlencode for proper URL encoding
+response=$(curl -fsS --get "http://localhost:8000/geocode" \
+  --data-urlencode "calle=belgrano" \
+  --data-urlencode "altura=100" 2>/dev/null || echo "")
 if [ -n "$response" ]; then
     echo "✓ Geocoding endpoint responding"
     echo "  Sample response: $response" | head -c 100
