@@ -33,6 +33,7 @@ services:
       - "9200:9200"   # opcional: acceso a ES desde la LAN
     volumes:
       - esdata:/usr/share/elasticsearch/data
+      - ./elasticsearch/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:9200/_cluster/health"]
       interval: 5s

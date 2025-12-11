@@ -111,6 +111,7 @@ Si encuentras errores durante el inicio, consulta [DOCKER_TROUBLESHOOTING.md](./
 - Error "cannot change name of input parameter": Limpia los volúmenes con `docker compose down -v`
 - Error "column nums_norm does not exist": Corregido en la última versión, actualiza el código
 - Importer falla: Verifica que los archivos GeoJSON existan en `./data/`
+- **WSL2 Clock warnings en Elasticsearch**: Ver [WSL2_TROUBLESHOOTING.md](./WSL2_TROUBLESHOOTING.md) para soluciones específicas de WSL2
 
 **Script de prueba automatizado**:
 ```bash

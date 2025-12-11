@@ -1,0 +1,19 @@
+# Elasticsearch configuration for geocodificador
+# Optimized for single-node development setup
+
+cluster.name: "docker-cluster"
+network.host: 0.0.0.0
+
+# Security settings
+xpack.security.enabled: false
+
+# Discovery settings for single node
+discovery.type: single-node
+
+# WSL2 clock drift mitigation
+# These settings help reduce timer warnings in WSL2 environments
+# where clock synchronization can be problematic
+bootstrap.memory_lock: false
+
+# Logging configuration to suppress timer warnings
+logger.org.elasticsearch.threadpool: ERROR

@@ -20,6 +20,24 @@ docker compose up
 
 ## Common Errors
 
+### WSL2 Clock Synchronization Warnings
+
+**Symptom**: 
+```json
+{
+  "@timestamp":"2025-12-11T18:01:57.366Z",
+  "log.level": "WARN",
+  "message":"absolute clock went backwards by [459ms/459ms] while timer thread was sleeping",
+  ...
+}
+```
+
+**Cause**: WSL2 virtual machine clock drift issues.
+
+**Solution**: See the dedicated [WSL2_TROUBLESHOOTING.md](./WSL2_TROUBLESHOOTING.md) guide for comprehensive solutions.
+
+**Quick Fix**: These warnings are generally harmless and won't affect functionality. The system includes configuration to suppress them.
+
 ### Error: "cannot change name of input parameter"
 
 **Symptom**: 
