@@ -44,6 +44,80 @@ app.add_middleware(
 db_pool: SimpleConnectionPool | None = None
 es_client: httpx.AsyncClient | None = None
 
+def _ensure_db_functions():
+    ddl = """
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_proc
+        WHERE proname = 'resolve_calle' AND pronamespace = 'public'::regnamespace
+      ) THEN
+        CREATE OR REPLACE FUNCTION public.resolve_calle(q text, lim int DEFAULT 10)
+        RETURNS TABLE(numero_cal text, nombre_cal text, score numeric)
+        LANGUAGE sql STABLE AS $$
+        WITH params AS (
+          SELECT public.norm_text(q) AS qnorm,
+                 public.drop_prefix_tokens(string_to_array(public.norm_text(q), ' ')) AS qtoks
+        ),
+        pat AS (
+          SELECT CASE WHEN array_length(qtoks,1) IS NULL THEN '%'
+                      ELSE '%' || array_to_string(qtoks, '%') || '%'
+                 END AS like_pat
+          FROM params
+        ),
+        c AS (
+          SELECT numero_cal::text AS numero_cal,
+                 nombre_cal,
+                 public.norm_text(nombre_cal) AS nnorm
+          FROM public.callejero_geolocalizador
+        ),
+        scored AS (
+          SELECT
+            c.numero_cal,
+            c.nombre_cal,
+            GREATEST(
+              similarity(c.nnorm, (SELECT qnorm FROM params)),
+              CASE WHEN c.nnorm ILIKE (SELECT like_pat FROM pat) THEN 0.7 ELSE 0 END,
+              (
+                SELECT COALESCE(
+                  SUM(CASE WHEN t <> '' AND position(t in c.nnorm) > 0 THEN 0.15 ELSE 0 END),
+                  0
+                )
+                FROM unnest((SELECT qtoks FROM params)) t
+              )
+            ) AS score
+          FROM c
+          WHERE c.nnorm ILIKE (SELECT like_pat FROM pat)
+             OR similarity(c.nnorm, (SELECT qnorm FROM params)) > 0.35
+        ),
+        ranked AS (
+          SELECT
+            numero_cal, nombre_cal, score,
+            ROW_NUMBER() OVER (PARTITION BY nombre_cal ORDER BY score DESC, nombre_cal) AS rn
+          FROM scored
+        )
+        SELECT numero_cal, nombre_cal, score
+        FROM ranked
+        WHERE rn = 1
+        ORDER BY score DESC, nombre_cal
+        LIMIT COALESCE(lim, 10);
+        $$;
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_proc
+        WHERE proname = 'sugerencias_calles' AND pronamespace = 'public'::regnamespace
+      ) THEN
+        CREATE OR REPLACE FUNCTION public.sugerencias_calles(q text, lim int DEFAULT 20)
+        RETURNS TABLE(numero_cal text, nombre_cal text, score numeric)
+        LANGUAGE sql STABLE AS $$
+          SELECT * FROM public.resolve_calle(q, lim);
+        $$;
+      END IF;
+    END$$;
+    """
+    db_exec(ddl)
+
 def db_query(sql: str, params=()):
     if db_pool is None:
         raise RuntimeError("DB pool no inicializado")
@@ -52,6 +126,17 @@ def db_query(sql: str, params=()):
         with conn.cursor() as cur:
             cur.execute(sql, params)
             return cur.fetchall()
+    finally:
+        db_pool.putconn(conn)
+
+def db_exec(sql: str):
+    if db_pool is None:
+        raise RuntimeError("DB pool no inicializado")
+    conn = db_pool.getconn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql)
+        conn.commit()
     finally:
         db_pool.putconn(conn)
 
@@ -79,6 +164,7 @@ async def _startup():
     global db_pool, es_client
     # Pool de 1..10 conexiones (ajustá a tu carga real)
     db_pool = SimpleConnectionPool(minconn=1, maxconn=10, **PG)
+    _ensure_db_functions()
     es_client = httpx.AsyncClient(base_url=ES_URL)
 
 @app.on_event("shutdown")
