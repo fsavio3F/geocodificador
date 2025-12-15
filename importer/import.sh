@@ -1,5 +1,7 @@
 #!/bin/sh
-set -eu
+# set -e: abort on error (portable). set -u: abort on undefined vars; guard in case shell lacks it.
+set -e
+(set -u >/dev/null 2>&1) && set -u
 
 # ---------- Config ----------
 PGHOST="${PGHOST:-db}"
