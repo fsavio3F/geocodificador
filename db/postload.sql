@@ -175,9 +175,15 @@ WITH codes AS (
 norm AS (
   SELECT public.norm_code(c1) AS n1, public.norm_code(c2) AS n2 FROM codes
 ),
+labels AS (
+  SELECT
+    (SELECT nombre_cal FROM public.callejero_geolocalizador WHERE public.norm_code(numero_cal) = public.norm_code((SELECT c1 FROM codes)) LIMIT 1) AS calle1_nombre,
+    (SELECT nombre_cal FROM public.callejero_geolocalizador WHERE public.norm_code(numero_cal) = public.norm_code((SELECT c2 FROM codes)) LIMIT 1) AS calle2_nombre
+),
 pick AS (
   SELECT
-    i.geom AS geom_any
+    i.geom AS geom_any,
+    i.calles AS calles_txt
   FROM public.intersecciones_geolocalizador i, norm
   WHERE (ARRAY[n1, n2] <@ i.nums_norm) OR (ARRAY[n2, n1] <@ i.nums_norm)
   LIMIT 1
@@ -208,6 +214,15 @@ SELECT jsonb_build_object(
   'lat',     (SELECT ST_Y(g4326) FROM wgs),
   'lon',     (SELECT ST_X(g4326) FROM wgs),
   'geojson', (SELECT ST_AsGeoJSON(g4326)::jsonb FROM wgs),
+  'calles_consultadas', (SELECT jsonb_build_array(calle1_nombre, calle2_nombre) FROM labels),
+  'calles_interseccion', (
+    SELECT to_jsonb(ARRAY(
+      SELECT trim(both ' ' FROM x)
+      FROM regexp_split_to_table(calles_txt, '\s*;\s*') AS x
+      WHERE x <> ''
+    ))
+    FROM pick
+  ),
   'message', CASE WHEN EXISTS (SELECT 1 FROM wgs WHERE g4326 IS NOT NULL) THEN NULL
                   ELSE 'Intersección no encontrada o geometría no puntual.' END
 );
@@ -309,4 +324,3 @@ END$$;
 
 ANALYZE public.callejero_geolocalizador;
 ANALYZE public.intersecciones_geolocalizador;
-

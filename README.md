@@ -206,6 +206,8 @@ curl "http://localhost:8000/geocode_interseccion?calle1=corrientes&calle2=callao
 3. Extrae punto de geometría
 4. Transforma a WGS84
 
+La respuesta incluye `calles_consultadas` (nombres resueltos para cada calle) y `calles_interseccion` (nombres provenientes de la intersección) para facilitar la validación.
+
 ## 🗄️ Base de Datos
 
 ### Tablas Principales
