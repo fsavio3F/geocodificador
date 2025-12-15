@@ -177,8 +177,15 @@ norm AS (
 ),
 labels AS (
   SELECT
-    (SELECT nombre_cal FROM public.callejero_geolocalizador WHERE public.norm_code(numero_cal) = public.norm_code((SELECT c1 FROM codes)) LIMIT 1) AS calle1_nombre,
-    (SELECT nombre_cal FROM public.callejero_geolocalizador WHERE public.norm_code(numero_cal) = public.norm_code((SELECT c2 FROM codes)) LIMIT 1) AS calle2_nombre
+    codes.c1,
+    codes.c2,
+    c1.nombre_cal AS calle1_nombre,
+    c2.nombre_cal AS calle2_nombre
+  FROM codes
+  LEFT JOIN public.callejero_geolocalizador c1
+    ON public.norm_code(c1.numero_cal) = public.norm_code(codes.c1)
+  LEFT JOIN public.callejero_geolocalizador c2
+    ON public.norm_code(c2.numero_cal) = public.norm_code(codes.c2)
 ),
 pick AS (
   SELECT
@@ -214,15 +221,19 @@ SELECT jsonb_build_object(
   'lat',     (SELECT ST_Y(g4326) FROM wgs),
   'lon',     (SELECT ST_X(g4326) FROM wgs),
   'geojson', (SELECT ST_AsGeoJSON(g4326)::jsonb FROM wgs),
-  'calles_consultadas', (SELECT jsonb_build_array(calle1_nombre, calle2_nombre) FROM labels),
-  'calles_interseccion', (
+  'calles_consultadas', (
+    SELECT jsonb_build_array(
+      COALESCE(calle1_nombre, calle1_q),
+      COALESCE(calle2_nombre, calle2_q)
+    ) FROM labels
+  ),
+  'calles_interseccion', COALESCE((
     SELECT to_jsonb(ARRAY(
       SELECT trim(both ' ' FROM x)
       FROM regexp_split_to_table(calles_txt, '\s*;\s*') AS x
       WHERE x <> ''
     ))
-    FROM pick
-  ),
+    FROM pick), '[]'::jsonb),
   'message', CASE WHEN EXISTS (SELECT 1 FROM wgs WHERE g4326 IS NOT NULL) THEN NULL
                   ELSE 'Intersección no encontrada o geometría no puntual.' END
 );
