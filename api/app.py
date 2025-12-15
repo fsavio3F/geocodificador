@@ -54,7 +54,7 @@ def _ensure_db_functions():
       ) THEN
         CREATE OR REPLACE FUNCTION public.resolve_calle(q text, lim int DEFAULT 10)
         RETURNS TABLE(numero_cal text, nombre_cal text, score numeric)
-        LANGUAGE sql STABLE AS $$
+        LANGUAGE sql STABLE AS $f$
         WITH params AS (
           SELECT public.norm_text(q) AS qnorm,
                  public.drop_prefix_tokens(string_to_array(public.norm_text(q), ' ')) AS qtoks
@@ -101,7 +101,7 @@ def _ensure_db_functions():
         WHERE rn = 1
         ORDER BY score DESC, nombre_cal
         LIMIT COALESCE(lim, 10);
-        $$;
+        $f$;
       END IF;
 
       IF NOT EXISTS (
@@ -110,9 +110,9 @@ def _ensure_db_functions():
       ) THEN
         CREATE OR REPLACE FUNCTION public.sugerencias_calles(q text, lim int DEFAULT 20)
         RETURNS TABLE(numero_cal text, nombre_cal text, score numeric)
-        LANGUAGE sql STABLE AS $$
+        LANGUAGE sql STABLE AS $f$
           SELECT * FROM public.resolve_calle(q, lim);
-        $$;
+        $f$;
       END IF;
     END$$;
     """
