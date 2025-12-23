@@ -117,28 +117,35 @@ else
 fi
 
 # ---------- Post-proceso ----------
-# recalcular nums_norm si existe la tabla/función
+# Refresh derived columns if they exist
 log "Refrescando derivados..."
-psql "host=${PGHOST} port=${PGPORT} dbname=${PGDB} user=${PGUSER}" >/dev/null <<'SQL' || true
+psql "host=${PGHOST} port=${PGPORT} dbname=${PGDB} user=${PGUSER}" >/dev/null 2>&1 <<'SQL' || true
 DO $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname='calc_nums_norm' AND pronamespace = 'public'::regnamespace)
-     AND EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='intersecciones_geolocalizador') THEN
+  -- Only update nums_norm if the column exists
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_schema='public' AND table_name='intersecciones_geolocalizador'
+               AND column_name='nums_norm') 
+     AND EXISTS (SELECT 1 FROM pg_proc WHERE proname='calc_nums_norm' AND pronamespace = 'public'::regnamespace) THEN
     UPDATE public.intersecciones_geolocalizador
       SET nums_norm = public.calc_nums_norm(num_calle)
       WHERE nums_norm IS NULL;
   END IF;
 END$$;
+SQL
 
+# Basic ANALYZE if tables exist
+log "Ejecutando análisis preliminar..."
+psql "host=${PGHOST} port=${PGPORT} dbname=${PGDB} user=${PGUSER}" >/dev/null 2>&1 <<'SQL' || true
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='callejero_geolocalizador') THEN
-    PERFORM 1;
+    ANALYZE public.callejero_geolocalizador;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='intersecciones_geolocalizador') THEN
+    ANALYZE public.intersecciones_geolocalizador;
   END IF;
 END$$;
-
-ANALYZE public.callejero_geolocalizador;
-ANALYZE public.intersecciones_geolocalizador;
 SQL
 
 # Ejecutar postload.sql si existe (índices, triggers, funciones geocode_*)

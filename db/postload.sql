@@ -27,8 +27,16 @@ DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables
              WHERE table_schema='public' AND table_name='intersecciones_geolocalizador') THEN
-    ALTER TABLE public.intersecciones_geolocalizador
-      ADD COLUMN IF NOT EXISTS nums_norm text[];
+    -- Add column if it doesn't exist
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema='public' 
+        AND table_name='intersecciones_geolocalizador'
+        AND column_name='nums_norm'
+    ) THEN
+      ALTER TABLE public.intersecciones_geolocalizador
+        ADD COLUMN nums_norm text[];
+    END IF;
 
     -- Trigger
     DROP TRIGGER IF EXISTS biu_set_nums_norm ON public.intersecciones_geolocalizador;
@@ -56,39 +64,6 @@ CREATE INDEX IF NOT EXISTS inter_nums_norm_gin
   ON public.intersecciones_geolocalizador USING gin (nums_norm);
 
 -- Funciones que consultan tablas (ahora sí)
-
-CREATE OR REPLACE FUNCTION public.resolve_calle(q text, lim int DEFAULT 10)
-RETURNS TABLE(numero_cal text, nombre_cal text, score numeric)
-LANGUAGE sql STABLE AS $$
-WITH params AS (
-  SELECT public.norm_text(q) AS qnorm,
-         public.drop_prefix_tokens(string_to_array(public.norm_text(q), ' ')) AS qtoks
-),
-pat AS (
-  SELECT CASE WHEN array_length(qtoks,1) IS NULL THEN '%'
-              ELSE '%' || array_to_string(qtoks, '%') || '%'
-         END AS like_pat
-  FROM params
-),
-c AS (
-  SELECT numero_cal::text AS numero_cal,
-         nombre_cal,
-         public.norm_text(nombre_cal) AS nnorm
-  FROM public.callejero_geolocalizador
-)
-SELECT
-  c.numero_cal, c.nombre_cal,
-  GREATEST(
-    similarity(c.nnorm, (SELECT qnorm FROM params)),
-    (SELECT COALESCE(SUM(CASE WHEN t <> '' AND position(t in c.nnorm) > 0 THEN 0.15 ELSE 0 END), 0)
-     FROM unnest((SELECT qtoks FROM params)) t)
-  ) AS score
-FROM c
-WHERE c.nnorm ILIKE (SELECT like_pat FROM pat)
-   OR similarity(c.nnorm, (SELECT qnorm FROM params)) > 0.35
-ORDER BY score DESC, c.nombre_cal
-LIMIT COALESCE(lim,10);
-$$;
 
 CREATE OR REPLACE FUNCTION public.resolve_code_or_name(q text)
 RETURNS text LANGUAGE sql STABLE AS $$
@@ -246,7 +221,29 @@ SELECT jsonb_build_object(
 );
 $$;
 
-CREATE OR REPLACE FUNCTION public.sugerencias_calles(q text, lim int DEFAULT 20)
+-- Drop function if exists to avoid parameter name conflicts
+-- Drop all possible variants of the function
+DO $$
+DECLARE
+  func_rec RECORD;
+BEGIN
+  -- Drop any version of sugerencias_calles function
+  FOR func_rec IN 
+    SELECT oid::regprocedure::text AS func_signature
+    FROM pg_proc
+    WHERE proname = 'sugerencias_calles'
+      AND pronamespace = 'public'::regnamespace
+  LOOP
+    EXECUTE 'DROP FUNCTION IF EXISTS ' || func_rec.func_signature || ' CASCADE';
+  END LOOP;
+EXCEPTION
+  WHEN OTHERS THEN NULL;
+END$$;
+
+-- Now create the function with proper parameters
+-- Note: Using CREATE (not CREATE OR REPLACE) because we've already dropped all variants above.
+-- This ensures a clean creation without parameter name conflicts.
+CREATE FUNCTION public.sugerencias_calles(q text, lim int DEFAULT 20)
 RETURNS TABLE(numero_cal text, nombre_cal text, score numeric)
 LANGUAGE sql STABLE AS $$
   SELECT * FROM public.resolve_calle(q, lim);
@@ -307,9 +304,11 @@ $$;
 -- Backfill y estadísticas
 DO $$
 BEGIN
+  -- Only backfill if both column and function exist
   IF EXISTS (SELECT 1 FROM information_schema.columns
              WHERE table_schema='public' AND table_name='intersecciones_geolocalizador'
-               AND column_name='nums_norm') THEN
+               AND column_name='nums_norm')
+     AND EXISTS (SELECT 1 FROM pg_proc WHERE proname='calc_nums_norm' AND pronamespace = 'public'::regnamespace) THEN
     UPDATE public.intersecciones_geolocalizador
     SET nums_norm = public.calc_nums_norm(num_calle)
     WHERE nums_norm IS NULL;
