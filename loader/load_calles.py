@@ -114,9 +114,27 @@ def post_bulk(buf: io.StringIO):
         raise RuntimeError("Bulk devolvió errors=true")
 
 def bulk_load(chunk_size=2000):
-    print(f"[loader] Iniciando bulk hacia {INDEX}…")
+    print("=" * 60)
+    print("[loader] INICIANDO CARGA BULK A ELASTICSEARCH")
+    print("=" * 60)
+    print(f"[loader] Índice destino: {INDEX}")
+    print(f"[loader] Tamaño de lote: {chunk_size} documentos")
+    print("-" * 60)
+    
+    # First, count total rows for progress calculation
+    print("[loader] Contando registros totales...")
+    with psycopg2.connect(**PG) as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM public.callejero_geolocalizador")
+            total_rows = cur.fetchone()[0]
+    
+    print(f"[loader] Total de registros a procesar: {total_rows:,}")
+    print("-" * 60)
+    
     buf = io.StringIO()
     n = 0
+    start_time = time.time()
+    
     for meta, doc in iter_rows(batch_size=chunk_size):
         buf.write(json.dumps(meta, ensure_ascii=False) + "\n")
         buf.write(json.dumps(doc,  ensure_ascii=False) + "\n")
@@ -124,11 +142,36 @@ def bulk_load(chunk_size=2000):
         if n % chunk_size == 0:
             post_bulk(buf)
             buf = io.StringIO()
-            print(f"[loader] Enviados {n} documentos…")
+            # Calculate progress
+            progress = (n / total_rows) * 100 if total_rows > 0 else 0
+            elapsed = time.time() - start_time
+            rate = n / elapsed if elapsed > 0 else 0
+            eta = ((total_rows - n) / rate) if rate > 0 else 0
+            
+            print(f"[loader] Progreso: {n:,}/{total_rows:,} ({progress:.1f}%) "
+                  f"| Velocidad: {rate:.0f} docs/s | ETA: {eta:.0f}s")
+    
+    # Send remaining documents
     post_bulk(buf)
+    
+    # Final statistics
+    elapsed_total = time.time() - start_time
+    avg_rate = n / elapsed_total if elapsed_total > 0 else 0
+    
+    print("-" * 60)
+    print(f"[loader] ✓ Carga completada")
+    print(f"[loader] Total enviados: {n:,} documentos")
+    print(f"[loader] Tiempo total: {elapsed_total:.1f}s")
+    print(f"[loader] Velocidad promedio: {avg_rate:.0f} docs/s")
+    print("-" * 60)
+    
     # refresh para visibilidad inmediata
+    print("[loader] Refrescando índice...")
     requests.post(f"{ES_URL}/{INDEX}/_refresh", timeout=10)
-    print(f"[loader] Bulk finalizado. Total enviados: {n}")
+    print("[loader] ✓ Índice refrescado")
+    print("=" * 60)
+    print("[loader] CARGA BULK FINALIZADA EXITOSAMENTE ✓")
+    print("=" * 60)
 
 if __name__ == "__main__":
     wait_db()
