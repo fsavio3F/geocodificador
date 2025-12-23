@@ -1,5 +1,7 @@
 #!/bin/sh
-set -eu
+# set -e: abort on error (portable). set -u: abort on undefined vars; guard in case shell lacks it.
+set -e
+(set -u >/dev/null 2>&1) && set -u
 
 # ---------- Config ----------
 PGHOST="${PGHOST:-db}"
@@ -91,7 +93,13 @@ fi
 
 # ---------- Importar (si corresponde) ----------
 if [ "${SKIP_IMPORT:-0}" -eq 0 ]; then
-  log "Importando $CALLEJERO → $TAB_CALLEJERO ..."
+  log "=========================================="
+  log "INICIANDO IMPORTACIÓN DE DATOS"
+  log "=========================================="
+  
+  log "[1/2] Importando $CALLEJERO → $TAB_CALLEJERO ..."
+  log "      Archivo: $(basename "$CALLEJERO")"
+  log "      Tamaño: $(du -h "$CALLEJERO" | cut -f1)"
   ogr2ogr -f PostgreSQL "PG:host=${PGHOST} port=${PGPORT} dbname=${PGDB} user=${PGUSER} password=${PGPASSWORD}" \
     "$CALLEJERO" \
     -nln "$TAB_CALLEJERO" \
@@ -99,9 +107,12 @@ if [ "${SKIP_IMPORT:-0}" -eq 0 ]; then
     -lco GEOMETRY_NAME=geom \
     -lco FID=id \
     -t_srs "$DST_SRS" -s_srs "$SRC_SRS" \
-    $(ogr_overwrite_flag) -skipfailures
+    $(ogr_overwrite_flag) -skipfailures -progress
+  log "✓ Callejero importado exitosamente"
 
-  log "Importando $INTESECC → $TAB_INTERS ..."
+  log "[2/2] Importando $INTESECC → $TAB_INTERS ..."
+  log "      Archivo: $(basename "$INTESECC")"
+  log "      Tamaño: $(du -h "$INTESECC" | cut -f1)"
   ogr2ogr -f PostgreSQL "PG:host=${PGHOST} port=${PGPORT} dbname=${PGDB} user=${PGUSER} password=${PGPASSWORD}" \
     "$INTESECC" \
     -nln "$TAB_INTERS" \
@@ -109,44 +120,48 @@ if [ "${SKIP_IMPORT:-0}" -eq 0 ]; then
     -lco GEOMETRY_NAME=geom \
     -lco FID=id \
     -t_srs "$DST_SRS" -s_srs "$SRC_SRS" \
-    $(ogr_overwrite_flag) -skipfailures
+    $(ogr_overwrite_flag) -skipfailures -progress
+  log "✓ Intersecciones importadas exitosamente"
 
   echo "${H1}|${H2}|${SRC_SRS}|${DST_SRS}|${OGR_APPEND}|${PROMOTE_MULTI}" > "$SFILE"
+  log "=========================================="
+  log "IMPORTACIÓN COMPLETADA"
+  log "=========================================="
 else
   log "Usando datos ya importados."
 fi
 
 # ---------- Post-proceso ----------
-# recalcular nums_norm si existe la tabla/función
-log "Refrescando derivados..."
-psql "host=${PGHOST} port=${PGPORT} dbname=${PGDB} user=${PGUSER}" >/dev/null <<'SQL' || true
-DO $$
-BEGIN
-  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname='calc_nums_norm' AND pronamespace = 'public'::regnamespace)
-     AND EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='intersecciones_geolocalizador') THEN
-    UPDATE public.intersecciones_geolocalizador
-      SET nums_norm = public.calc_nums_norm(num_calle)
-      WHERE nums_norm IS NULL;
-  END IF;
-END$$;
+log "=========================================="
+log "EJECUTANDO POST-PROCESAMIENTO"
+log "=========================================="
 
+# Note: nums_norm column and backfill will be handled by postload.sql
+# Just run basic ANALYZE if tables exist
+log "[1/2] Ejecutando análisis preliminar de tablas..."
+psql "host=${PGHOST} port=${PGPORT} dbname=${PGDB} user=${PGUSER}" >/dev/null 2>&1 <<'SQL' || true
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='callejero_geolocalizador') THEN
-    PERFORM 1;
+    ANALYZE public.callejero_geolocalizador;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='intersecciones_geolocalizador') THEN
+    ANALYZE public.intersecciones_geolocalizador;
   END IF;
 END$$;
-
-ANALYZE public.callejero_geolocalizador;
-ANALYZE public.intersecciones_geolocalizador;
 SQL
+log "✓ Análisis completado"
 
 # Ejecutar postload.sql si existe (índices, triggers, funciones geocode_*)
 if [ -f "$POSTLOAD_SQL" ]; then
-  log "Ejecutando postload: $POSTLOAD_SQL"
+  log "[2/2] Ejecutando postload: $POSTLOAD_SQL"
+  log "      Creando índices, triggers y funciones..."
   psql "host=${PGHOST} port=${PGPORT} dbname=${PGDB} user=${PGUSER}" -v ON_ERROR_STOP=1 -f "$POSTLOAD_SQL"
+  log "✓ Post-procesamiento SQL completado"
 else
   log "Sin postload.sql (saltando)."
 fi
 
-log "Importación finalizada."
+log "=========================================="
+log "IMPORTACIÓN FINALIZADA EXITOSAMENTE ✓"
+log "=========================================="
