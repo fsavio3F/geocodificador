@@ -1,0 +1,3 @@
+# Backup files - but keep data backups
+*.bak
+!data/*.bak

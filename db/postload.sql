@@ -57,39 +57,6 @@ CREATE INDEX IF NOT EXISTS inter_nums_norm_gin
 
 -- Funciones que consultan tablas (ahora sí)
 
-CREATE OR REPLACE FUNCTION public.resolve_calle(q text, lim int DEFAULT 10)
-RETURNS TABLE(numero_cal text, nombre_cal text, score numeric)
-LANGUAGE sql STABLE AS $$
-WITH params AS (
-  SELECT public.norm_text(q) AS qnorm,
-         public.drop_prefix_tokens(string_to_array(public.norm_text(q), ' ')) AS qtoks
-),
-pat AS (
-  SELECT CASE WHEN array_length(qtoks,1) IS NULL THEN '%'
-              ELSE '%' || array_to_string(qtoks, '%') || '%'
-         END AS like_pat
-  FROM params
-),
-c AS (
-  SELECT numero_cal::text AS numero_cal,
-         nombre_cal,
-         public.norm_text(nombre_cal) AS nnorm
-  FROM public.callejero_geolocalizador
-)
-SELECT
-  c.numero_cal, c.nombre_cal,
-  GREATEST(
-    similarity(c.nnorm, (SELECT qnorm FROM params)),
-    (SELECT COALESCE(SUM(CASE WHEN t <> '' AND position(t in c.nnorm) > 0 THEN 0.15 ELSE 0 END), 0)
-     FROM unnest((SELECT qtoks FROM params)) t)
-  ) AS score
-FROM c
-WHERE c.nnorm ILIKE (SELECT like_pat FROM pat)
-   OR similarity(c.nnorm, (SELECT qnorm FROM params)) > 0.35
-ORDER BY score DESC, c.nombre_cal
-LIMIT COALESCE(lim,10);
-$$;
-
 CREATE OR REPLACE FUNCTION public.resolve_code_or_name(q text)
 RETURNS text LANGUAGE sql STABLE AS $$
 WITH qn AS (SELECT public.norm_code(q) AS qcode),
@@ -245,6 +212,30 @@ SELECT jsonb_build_object(
                   ELSE 'Intersección no encontrada o geometría no puntual.' END
 );
 $$;
+
+-- Drop function if exists to avoid parameter name conflicts
+-- Drop all possible variants of the function
+DROP FUNCTION IF EXISTS public.sugerencias_calles(text, integer);
+DROP FUNCTION IF EXISTS public.sugerencias_calles(text);
+DO $$
+DECLARE
+  drop_sql text;
+BEGIN
+  -- Drop any version with different parameter names
+  SELECT COALESCE(
+    string_agg('DROP FUNCTION IF EXISTS ' || oid::regprocedure || ' CASCADE;', ' '),
+    ''
+  ) INTO drop_sql
+  FROM pg_proc
+  WHERE proname = 'sugerencias_calles'
+    AND pronamespace = 'public'::regnamespace;
+  
+  IF drop_sql <> '' THEN
+    EXECUTE drop_sql;
+  END IF;
+EXCEPTION
+  WHEN OTHERS THEN NULL;
+END$$;
 
 CREATE OR REPLACE FUNCTION public.sugerencias_calles(q text, lim int DEFAULT 20)
 RETURNS TABLE(numero_cal text, nombre_cal text, score numeric)
